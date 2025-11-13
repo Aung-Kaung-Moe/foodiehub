@@ -67,8 +67,11 @@ export default function App() {
   const handleAddToCart = async (item) => {
     if (!item) return;
 
+    // 🔒 Not logged in: show toast + close popup + redirect
     if (!user) {
-      navigate("/login");
+      showToast("Please log in");
+      setSelected(null);      // close current item modal
+      navigate("/login");     // redirect to login page
       return;
     }
 
@@ -86,7 +89,15 @@ export default function App() {
         "Item Added successfully";
       showToast(msg);
     } catch (e) {
-      showToast("Item Added successfully");
+      const msg = e?.message || "";
+      // If backend says unauthenticated, behave same as above
+      if (msg.includes("Unauthenticated") || msg.includes("401")) {
+        showToast("Please log in");
+        setSelected(null);
+        navigate("/login");
+      } else {
+        showToast("Item Added successfully");
+      }
     }
   };
 
@@ -123,8 +134,17 @@ export default function App() {
           />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
-          {/* 🔥 pass showToast into Profile */}
-          <Route path="/profile" element={<Profile showToast={showToast} />} />
+          {/* pass showToast + user + updater into Profile */}
+          <Route
+            path="/profile"
+            element={
+              <Profile
+                showToast={showToast}
+                user={user}
+                onUserUpdate={setUser}
+              />
+            }
+          />
           <Route path="/login" element={<Auth onLogin={handleLogin} />} />
           <Route path="/register" element={<Auth onLogin={handleLogin} />} />
           <Route path="/cart" element={<Cart />} />

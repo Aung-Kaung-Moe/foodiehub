@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { apiBase } from "../lib/api";
 
 export default function ProfileMenu({ user, onLogout }) {
   const [open, setOpen] = useState(false);
@@ -26,6 +27,14 @@ export default function ProfileMenu({ user, onLogout }) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   })();
 
+  // Build avatar URL from user.avatar_url if present
+  const avatarUrl = (() => {
+    const u = user?.avatar_url;
+    if (!u) return null;
+    if (u.startsWith("http://") || u.startsWith("https://")) return u;
+    return `${apiBase}${u}`;
+  })();
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -35,9 +44,17 @@ export default function ProfileMenu({ user, onLogout }) {
         aria-expanded={open}
         aria-label="Open profile menu"
       >
-        <span className="text-sm font-bold text-emerald-300 select-none">
-          {initials}
-        </span>
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={user?.name || "Profile"}
+            className="h-9 w-9 rounded-full object-cover"
+          />
+        ) : (
+          <span className="text-sm font-bold text-emerald-300 select-none">
+            {initials}
+          </span>
+        )}
       </button>
 
       {open && (
@@ -69,7 +86,10 @@ export default function ProfileMenu({ user, onLogout }) {
             Orders
           </Link>
           <button
-            onClick={() => { onLogout?.(); setOpen(false); }}
+            onClick={() => {
+              onLogout?.();
+              setOpen(false);
+            }}
             className="block w-full text-left rounded-xl px-3 py-2 hover:bg-neutral-800 text-red-300"
             role="menuitem"
           >
