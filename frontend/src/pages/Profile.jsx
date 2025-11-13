@@ -1,4 +1,3 @@
-// frontend/src/pages/Profile.jsx
 import React, { useEffect, useRef, useState } from "react";
 import {
   apiProfile,
@@ -9,9 +8,7 @@ import {
 } from "../lib/api";
 import { Link } from "react-router-dom";
 
-const okAlert = (m) => window.alert(m);
-const errorAlert = (m) => window.alert(m);
-
+// helper icons
 const EditIcon = (props) => (
   <svg viewBox="0 0 24 24" className={`h-4 w-4 ${props.className || ""}`} fill="currentColor" aria-hidden="true">
     <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.04a1.001 1.001 0 0 0 0-1.42l-2.5-2.5a1.001 1.001 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.99-1.66Z"/>
@@ -36,7 +33,7 @@ function toAbsUrl(u) {
   return u.startsWith("/") ? `${apiBase}${u}` : u;
 }
 
-export default function Profile() {
+export default function Profile({ showToast }) {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState(null);
 
@@ -53,13 +50,23 @@ export default function Profile() {
     new_password_confirmation: "",
   });
 
+  // small helpers that prefer toast but fall back to alert
+  const success = (msg) => {
+    if (showToast) showToast(msg);
+    else window.alert(msg);
+  };
+  const fail = (msg) => {
+    if (showToast) showToast(msg);
+    else window.alert(msg);
+  };
+
   useEffect(() => {
     (async () => {
       try {
         const { user } = await apiProfile();
         setMe(user);
       } catch (e) {
-        errorAlert(e.message || "Failed to load profile");
+        fail(e.message || "Failed to load profile");
       } finally {
         setLoading(false);
       }
@@ -73,6 +80,7 @@ export default function Profile() {
     setPreview({ file: f, url });
   };
 
+  // Avatar update: show "Profile updated"
   const saveAvatar = async () => {
     if (!preview?.file) return;
     try {
@@ -81,9 +89,9 @@ export default function Profile() {
       const { user } = await apiProfile();
       setMe(user);
       setPreview(null);
-      okAlert("Avatar updated");
+      success("Profile updated");
     } catch (e) {
-      errorAlert(e.message || "Avatar update failed");
+      fail(e.message || "Avatar update failed");
     }
   };
 
@@ -99,6 +107,7 @@ export default function Profile() {
     });
   };
 
+  // Inline field update (home_address, etc): show "Profile updated"
   const commitEdit = async (key) => {
     try {
       const newVal = editing[key] ?? null;
@@ -107,19 +116,22 @@ export default function Profile() {
       setMe((prev) => ({ ...prev, [key]: newVal }));
 
       // send only the changed field
-      const { user } = await apiProfileUpdate({ [key]: newVal });
+      const res = await apiProfileUpdate({ [key]: newVal });
 
-      // ensure state matches server (important if backend normalizes)
-      setMe(user);
+      // ensure state matches server (if backend sends updated user)
+      if (res && res.user) {
+        setMe(res.user);
+      }
+
       cancelEdit(key);
-      okAlert("Profile saved");
+      success("Profile updated");
     } catch (e) {
       // revert optimistic update by refetching
       try {
         const { user } = await apiProfile();
         setMe(user);
       } catch {}
-      errorAlert(e.message || "Save failed");
+      fail(e.message || "Save failed");
     }
   };
 
@@ -127,22 +139,27 @@ export default function Profile() {
     e.preventDefault();
 
     if (!pwd.current_password) {
-      return errorAlert("Current password is required");
+      return fail("Current password is required");
     }
     if (!pwd.new_password || !pwd.new_password_confirmation) {
-      return errorAlert("Please fill new password and repeat new password");
+      return fail("Please fill new password and repeat new password");
     }
     if (pwd.new_password !== pwd.new_password_confirmation) {
-      return errorAlert("New passwords do not match");
+      return fail("New passwords do not match");
     }
 
     try {
-      await apiChangePassword(pwd); // server verifies current password
+      const res = await apiChangePassword(pwd); // server verifies current password + match
       setPwd({ current_password: "", new_password: "", new_password_confirmation: "" });
-      okAlert("Password updated");
+      success(res?.message || "Password updated");
     } catch (e) {
-      // Will show "Current password is incorrect" if backend returned that
-      errorAlert(e.message || "Password update failed");
+      // backend messages:
+      // "Current password is incorrect", "New passwords do not match", etc.
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Password update failed";
+      fail(msg);
     }
   };
 

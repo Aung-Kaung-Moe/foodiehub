@@ -11,63 +11,74 @@ const ok = (m) => window.alert(m);
 const err = (m) => window.alert(m);
 
 const transports = [
-  { key: "bike", label: "Bike" },
-  { key: "motorcycle", label: "Motorcycle" },
-  { key: "car", label: "Car" },
+  { key: "bike", label: "Bike", price: 2 },
+  { key: "motorcycle", label: "Motorcycle", price: 4 },
+  { key: "car", label: "Car", price: 6 },
 ];
 
 export default function Cart() {
-  const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
 
-  const load = async () => {
+  const loadCart = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const { cart } = await apiCart();
-      setCart(cart);
+      const data = await apiCart();
+      // backend returns { id, transport, items: [...] }
+      setCart(data.cart || data);
     } catch (e) {
-      err(e.message || "Failed to load cart");
+      console.error(e);
+      setError("Unable to load cart.");
+      setCart({ items: [] });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    loadCart();
+  }, []);
 
-  const removeItem = async (id) => {
+  const removeItem = async (itemId) => {
+    if (!itemId) return;
     setBusy(true);
     try {
-      const { cart } = await apiCartRemoveItem(id);
-      setCart(cart);
+      await apiCartRemoveItem(itemId);
+      await loadCart();
     } catch (e) {
-      err(e.message || "Failed to remove item");
-    } finally {
+      console.error(e);
+      err("Failed to remove item");
       setBusy(false);
     }
   };
 
-  const setTransport = async (t) => {
+  const changeTransport = async (transportKey) => {
+    if (!cart) return;
     setBusy(true);
     try {
-      const { cart } = await apiCartSetTransport(t);
-      setCart(cart);
+      await apiCartSetTransport(transportKey);
+      setCart((prev) => ({ ...prev, transport: transportKey }));
     } catch (e) {
-      err(e.message || "Failed to set transport");
+      console.error(e);
+      err("Failed to update transport");
     } finally {
       setBusy(false);
     }
   };
 
   const checkout = async () => {
+    if (!cart || !cart.items || cart.items.length === 0) return;
     setBusy(true);
     try {
-      const res = await apiCartCheckout();
-      ok(res.message || "ordered successfully");
-      // reload fresh (empty) active cart
-      await load();
+      await apiCartCheckout();
+      ok("Order submitted successfully");
+      await loadCart();
     } catch (e) {
-      err(e.message || "Checkout failed");
-    } finally {
+      console.error(e);
+      err("Checkout failed");
       setBusy(false);
     }
   };
@@ -80,83 +91,123 @@ export default function Cart() {
     );
   }
 
+  const items = cart?.items || [];
+  const subtotal = items.reduce(
+    (sum, item) =>
+      sum + Number(item.price || 0) * Number(item.quantity || 1),
+    0
+  );
+  const selectedTransport =
+    transports.find((t) => t.key === cart?.transport) || null;
+  const deliveryFee = selectedTransport?.price || 0;
+  const total = subtotal + deliveryFee;
+
   return (
     <section className="py-10">
-      <div className="mx-auto max-w-3xl space-y-6">
-        <h1 className="text-2xl font-bold">Your Cart</h1>
+      <div className="mx-auto max-w-3xl space-y-8">
+        <h1 className="text-2xl font-semibold tracking-tight">Your cart</h1>
 
-        <div className="rounded-3xl bg-neutral-900 p-5 ring-1 ring-neutral-800">
-          {(!cart?.items || cart.items.length === 0) ? (
-            <p className="text-neutral-400">No items yet.</p>
-          ) : (
-            <ul className="space-y-3">
-              {cart.items.map((it) => (
-                <li key={it.id} className="flex items-center gap-3 rounded-2xl bg-neutral-950 p-3 ring-1 ring-neutral-800">
-                  <img src={it.image_url || "https://picsum.photos/seed/foodiehub/120/120"} alt={it.name} className="h-12 w-12 rounded-xl object-cover" />
-                  <div className="flex-1">
-                    <div className="font-medium">{it.name}</div>
-                    <div className="text-xs text-neutral-400">Qty {it.quantity}</div>
+        {error && (
+          <p className="text-sm text-red-400 mb-2">
+            {error} Please try again or refresh the page.
+          </p>
+        )}
+
+        {/* Cart items */}
+        {items.length === 0 ? (
+          <p className="text-neutral-400">Your cart is empty.</p>
+        ) : (
+          <div className="space-y-4 rounded-3xl bg-neutral-900 p-6 ring-1 ring-neutral-800">
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-4 border-b border-neutral-800 pb-4 last:border-none last:pb-0"
+              >
+                {item.image_url && (
+                  <img
+                    src={item.image_url}
+                    alt={item.name}
+                    className="h-16 w-16 rounded-2xl object-cover"
+                  />
+                )}
+                <div className="flex-1">
+                  <div className="font-medium">{item.name}</div>
+                  <div className="text-sm text-neutral-400">
+                    Qty {item.quantity} × ${Number(item.price).toFixed(2)}
                   </div>
-                  <div className="text-right">
-                    <div className="font-semibold">${Number(it.price).toFixed(2)}</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-semibold">
+                    $
+                    {(
+                      Number(item.price || 0) * Number(item.quantity || 1)
+                    ).toFixed(2)}
                   </div>
                   <button
+                    type="button"
                     disabled={busy}
-                    onClick={() => removeItem(it.id)}
-                    className="ml-2 rounded-xl px-3 py-2 ring-1 ring-neutral-700 hover:bg-neutral-900 disabled:opacity-50"
-                    title="Remove"
+                    onClick={() => removeItem(item.id)}
+                    className="mt-2 inline-flex items-center justify-center rounded-xl px-3 py-1 text-xs text-red-300 ring-1 ring-red-400/40 hover:bg-red-500/10 hover:text-red-200"
                   >
                     Remove
                   </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Transport choice */}
-        <div className="rounded-3xl bg-neutral-900 p-5 ring-1 ring-neutral-800">
-          <h2 className="text-lg font-semibold mb-3">Vehicle transport</h2>
-          <div className="flex flex-col sm:flex-row gap-2">
-            {transports.map((t) => (
-              <button
-                key={t.key}
-                disabled={busy}
-                onClick={() => setTransport(t.key)}
-                className={`rounded-xl px-4 py-2 ring-1 ${cart?.transport === t.key ? "bg-emerald-500/20 text-emerald-300 ring-emerald-500/40" : "ring-neutral-700 hover:bg-neutral-950"}`}
-              >
-                {t.label}
-              </button>
+                </div>
+              </div>
             ))}
           </div>
-          <p className="mt-2 text-sm text-neutral-400">
-            Transport cost: ${Number(cart?.transport_cost ?? 0).toFixed(2)}
+        )}
+
+        {/* Transport selection + totals */}
+        <div className="space-y-4 rounded-3xl bg-neutral-900 p-6 ring-1 ring-neutral-800">
+          <h2 className="text-lg font-semibold">Delivery options</h2>
+          <p className="text-sm text-neutral-400">
+            Choose one vehicle. Bike is the cheapest, car is the most
+            expensive. Delivery cost will be added to your total.
           </p>
-        </div>
 
-        {/* Summary & cash-only checkout */}
-        <div className="rounded-3xl bg-neutral-900 p-5 ring-1 ring-neutral-800">
-          <div className="flex items-center justify-between">
-            <span className="text-neutral-400">Subtotal</span>
-            <span className="font-semibold">${Number(cart?.subtotal ?? 0).toFixed(2)}</span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-neutral-400">Transport</span>
-            <span className="font-semibold">${Number(cart?.transport_cost ?? 0).toFixed(2)}</span>
-          </div>
-          <div className="flex items-center justify-between mt-3 border-t border-neutral-800 pt-3">
-            <span className="text-neutral-300">Total</span>
-            <span className="text-lg font-bold">${Number(cart?.total ?? 0).toFixed(2)}</span>
+          <div className="mt-3 space-y-2">
+            {transports.map((t) => (
+              <label
+                key={t.key}
+                className="flex cursor-pointer items-center justify-between rounded-2xl bg-neutral-950 px-4 py-2 ring-1 ring-neutral-800 hover:ring-emerald-500/40"
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="transport"
+                    value={t.key}
+                    checked={cart?.transport === t.key}
+                    onChange={() => changeTransport(t.key)}
+                    className="h-4 w-4"
+                  />
+                  <span>{t.label}</span>
+                </div>
+                <span className="text-sm text-neutral-300">
+                  + ${t.price.toFixed(2)}
+                </span>
+              </label>
+            ))}
           </div>
 
-          <div className="mt-4 text-sm text-neutral-400">
-            Payment method: <span className="text-neutral-200">Cash</span>
+          <div className="mt-4 space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-neutral-400">Items total</span>
+              <span className="font-medium">${subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-neutral-400">Delivery</span>
+              <span className="font-medium">${deliveryFee.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between border-t border-neutral-800 pt-2 text-base">
+              <span className="font-semibold">Final total</span>
+              <span className="font-semibold">${total.toFixed(2)}</span>
+            </div>
           </div>
 
           <button
-            disabled={busy || !cart || !cart.items || cart.items.length === 0}
+            disabled={busy || !items.length || !cart?.transport}
             onClick={checkout}
-            className="mt-4 w-full rounded-2xl bg-emerald-500/20 px-4 py-2 text-emerald-300 ring-1 ring-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-50"
+            className="mt-4 w-full rounded-2xl bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-50"
           >
             Submit order
           </button>

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\CartController;
 
 Route::prefix('api')->middleware(['web'])->group(function () {
     // Auth (public)
@@ -19,6 +20,13 @@ Route::prefix('api')->middleware(['web'])->group(function () {
         Route::put('/profile',            [ProfileController::class, 'update']);
         Route::post('/profile/avatar',    [ProfileController::class, 'updateAvatar']);
         Route::put('/profile/password',   [ProfileController::class, 'updatePassword']);
-        Route::post('/profile/password', [ProfileController::class, 'updatePassword']);
+        Route::post('/profile/password',  [ProfileController::class, 'updatePassword']);
+
+        // Cart
+        Route::get('/cart',               [CartController::class, 'show']);
+        Route::post('/cart/items',        [CartController::class, 'addItem']);
+        Route::delete('/cart/items/{id}', [CartController::class, 'removeItem']);
+        Route::put('/cart/transport',     [CartController::class, 'setTransport']);
+        Route::post('/cart/checkout',     [CartController::class, 'checkout']);
     });
 });
