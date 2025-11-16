@@ -16,7 +16,7 @@ import Orders from "./pages/Orders.jsx";
 import { foods as ALL_ITEMS } from "./data/foods.js";
 import { apiLogout, apiMe, apiCartAddItem } from "./lib/api";
 
-// helper: make sure price is a clean rounded value (4.2 -> 4, 4.9 -> 5)
+// helper: make sure price is a clean rounded value (3.5 -> 4, 4.9 -> 5)
 const normalizePrice = (p) => {
   const n = Number(p);
   if (!Number.isFinite(n)) return 0;
@@ -30,6 +30,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState("price-asc");
   const [popular, setPopular] = useState("all");
   const [selected, setSelected] = useState(null);
+  const [quantity, setQuantity] = useState(1);
   const [toast, setToast] = useState(null);
   const [user, setUser] = useState(null);
 
@@ -72,14 +73,19 @@ export default function App() {
     showToast._timer = window.setTimeout(() => setToast(null), 2500);
   };
 
+  const handleCloseModal = () => {
+    setSelected(null);
+    setQuantity(1);
+  };
+
   const handleAddToCart = async (item) => {
     if (!item) return;
 
     // Not logged in: show toast + close popup + redirect
     if (!user) {
       showToast("Please log in");
-      setSelected(null); // close current item modal
-      navigate("/login"); // redirect to login page
+      handleCloseModal();
+      navigate("/login");
       return;
     }
 
@@ -87,9 +93,9 @@ export default function App() {
       const res = await apiCartAddItem({
         product_id: item.id,
         name: item.name,
-        // 🔧 use normalized price so backend + cart match the UI
+        // use normalized price so backend + cart match the UI
         price: normalizePrice(item.price),
-        quantity: 1,
+        quantity: quantity,
         image_url: item.img,
       });
 
@@ -97,13 +103,14 @@ export default function App() {
         (res && (res.message || res.msg || res.status)) ||
         "Item Added successfully";
       showToast(msg);
+      handleCloseModal();
     } catch (e) {
       const msg = e?.message || "";
 
       // If backend says unauthenticated, behave same as above
       if (msg.includes("Unauthenticated") || msg.includes("401")) {
         showToast("Please log in");
-        setSelected(null);
+        handleCloseModal();
         navigate("/login");
       } else {
         // show real error instead of faking success
@@ -111,6 +118,11 @@ export default function App() {
       }
     }
   };
+
+  const increaseQty = () =>
+    setQuantity((q) => (q < 99 ? q + 1 : q));
+  const decreaseQty = () =>
+    setQuantity((q) => (q > 1 ? q - 1 : 1));
 
   return (
     <div className="min-h-screen antialiased bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
@@ -137,7 +149,10 @@ export default function App() {
                 <section className="mt-6 mb-16">
                   <FoodGrid
                     items={filtered}
-                    onPreview={(it) => setSelected(it)}
+                    onPreview={(it) => {
+                      setSelected(it);
+                      setQuantity(1);
+                    }}
                   />
                 </section>
               </>
@@ -164,7 +179,7 @@ export default function App() {
       <Footer />
 
       {/* Item details modal + Add to cart button */}
-      <Modal open={!!selected} onClose={() => setSelected(null)}>
+      <Modal open={!!selected} onClose={handleCloseModal}>
         {selected && (
           <div className="space-y-4">
             <div className="flex gap-4">
@@ -186,7 +201,6 @@ export default function App() {
                   </p>
                 </div>
                 <div className="mt-2 text-lg font-semibold text-emerald-300">
-                  {/* 🔧 show same normalized price as what we send to cart */}
                   ${normalizePrice(selected.price).toFixed(2)}
                 </div>
               </div>
@@ -199,11 +213,35 @@ export default function App() {
               </span>
             </p>
 
+            {/* Quantity selector */}
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-sm text-neutral-300">Quantity</span>
+              <div className="inline-flex items-center rounded-full bg-neutral-900 px-2 py-1 ring-1 ring-neutral-700">
+                <button
+                  type="button"
+                  onClick={decreaseQty}
+                  className="px-3 py-1 text-sm font-semibold text-neutral-200 hover:text-white"
+                >
+                  −
+                </button>
+                <span className="px-3 text-sm font-semibold text-neutral-100">
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={increaseQty}
+                  className="px-3 py-1 text-sm font-semibold text-neutral-200 hover:text-white"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={() => handleAddToCart(selected)}
               className="mt-4 w-full rounded-2xl bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/40 hover:bg-emerald-500/30"
             >
-              Add item to cart
+              Add {quantity} item{quantity > 1 ? "s" : ""} to cart
             </button>
           </div>
         )}
