@@ -67,11 +67,11 @@ export default function App() {
   const handleAddToCart = async (item) => {
     if (!item) return;
 
-    // 🔒 Not logged in: show toast + close popup + redirect
+    // Not logged in: show toast + close popup + redirect
     if (!user) {
       showToast("Please log in");
-      setSelected(null);      // close current item modal
-      navigate("/login");     // redirect to login page
+      setSelected(null); // close current item modal
+      navigate("/login"); // redirect to login page
       return;
     }
 
@@ -90,19 +90,21 @@ export default function App() {
       showToast(msg);
     } catch (e) {
       const msg = e?.message || "";
+
       // If backend says unauthenticated, behave same as above
       if (msg.includes("Unauthenticated") || msg.includes("401")) {
         showToast("Please log in");
         setSelected(null);
         navigate("/login");
       } else {
-        showToast("Item Added successfully");
+        // show real error instead of faking success
+        showToast(msg || "Failed to add item to cart");
       }
     }
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
+    <div className="min-h-screen antialiased bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
       <Navbar user={user} onLogout={handleLogout} />
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Routes>
@@ -170,19 +172,19 @@ export default function App() {
                   <h2 className="text-xl font-semibold tracking-tight">
                     {selected.name}
                   </h2>
-                  <p className="text-sm text-neutral-400 capitalize">
+                  <p className="text-sm text-neutral-300 capitalize">
                     {selected.category}
                   </p>
                 </div>
-                <div className="mt-2 text-lg font-semibold">
+                <div className="mt-2 text-lg font-semibold text-emerald-300">
                   ${Number(selected.price).toFixed(2)}
                 </div>
               </div>
             </div>
-            <p className="text-neutral-300">{selected.description}</p>
+            <p className="text-neutral-200">{selected.description}</p>
             <p className="text-sm text-neutral-400">
               Special ingredients:{" "}
-              <span className="text-neutral-200">
+              <span className="text-neutral-100">
                 {selected.ingredients.join(", ")}
               </span>
             </p>
