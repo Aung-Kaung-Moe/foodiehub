@@ -51,6 +51,8 @@ export default function Cart() {
     } catch (e) {
       console.error(e);
       err("Failed to remove item");
+    } finally {
+      // ✅ always re-enable buttons after the operation finishes
       setBusy(false);
     }
   };
@@ -79,6 +81,8 @@ export default function Cart() {
     } catch (e) {
       console.error(e);
       err("Checkout failed");
+    } finally {
+      // ✅ also re-enable after successful checkout
       setBusy(false);
     }
   };
@@ -147,7 +151,7 @@ export default function Cart() {
                     type="button"
                     disabled={busy}
                     onClick={() => removeItem(item.id)}
-                    className="mt-2 inline-flex items-center justify-center rounded-xl px-3 py-1 text-xs text-red-300 ring-1 ring-red-400/40 hover:bg-red-500/10 hover:text-red-200"
+                    className="mt-2 inline-flex items-center justify-center rounded-xl px-3 py-1 text-xs text-red-300 ring-1 ring-red-400/40 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50"
                   >
                     Remove
                   </button>
@@ -179,6 +183,7 @@ export default function Cart() {
                     checked={cart?.transport === t.key}
                     onChange={() => changeTransport(t.key)}
                     className="h-4 w-4"
+                    disabled={busy}
                   />
                   <span>{t.label}</span>
                 </div>

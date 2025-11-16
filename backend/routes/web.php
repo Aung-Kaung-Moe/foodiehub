@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\OrderController;
 
 Route::prefix('api')->middleware(['web'])->group(function () {
     // Auth (public)
@@ -23,10 +24,14 @@ Route::prefix('api')->middleware(['web'])->group(function () {
         Route::post('/profile/password',  [ProfileController::class, 'updatePassword']);
 
         // Cart
-        Route::get('/cart',               [CartController::class, 'show']);
-        Route::post('/cart/items',        [CartController::class, 'addItem']);
-        Route::delete('/cart/items/{id}', [CartController::class, 'removeItem']);
-        Route::put('/cart/transport',     [CartController::class, 'setTransport']);
-        Route::post('/cart/checkout',     [CartController::class, 'checkout']);
+    Route::get('/cart',                  [CartController::class, 'show']);
+    Route::post('/cart/items',           [CartController::class, 'addItem']);
+    Route::delete('/cart/items/{item}',  [CartController::class, 'removeItem']);
+    Route::put('/cart/transport',        [CartController::class, 'setTransport']);
+    Route::post('/cart/checkout',        [CartController::class, 'checkout']);
+
+    // Orders
+    Route::get('/orders',           [OrderController::class, 'index']);
+    Route::get('/orders/{order}',   [OrderController::class, 'show']);
     });
 });

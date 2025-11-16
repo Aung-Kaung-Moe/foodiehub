@@ -7,7 +7,9 @@ const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 // --- cookie utils ---
 function getCookie(name) {
   const m = document.cookie.match(
-    new RegExp('(?:^|; )' + name.replace(/[$()*+./?[\\\]^{|}]/g, '\\$&') + '=([^;]*)')
+    new RegExp(
+      "(?:^|; )" + name.replace(/[$()*+./?[\\\\\\]^{|}]/g, "\\$&") + "=([^;]*)"
+    )
   );
   return m ? decodeURIComponent(m[1]) : null;
 }
@@ -15,7 +17,9 @@ function getCookie(name) {
 // MUST be called before state-changing requests so Sanctum seeds XSRF-TOKEN
 export async function csrf() {
   if (!API) {
-    console.error("VITE_API_URL is not set. Create frontend/.env with VITE_API_URL=http://localhost:8000");
+    console.error(
+      "VITE_API_URL is not set. Create frontend/.env with VITE_API_URL=http://localhost:8000"
+    );
     throw new Error("API base URL not configured");
   }
   await fetch(`${API}/sanctum/csrf-cookie`, {
@@ -32,7 +36,11 @@ function extractErrorMessage(data, status) {
   let msg = (data && (data.message || data.error)) || `HTTP ${status}`;
   if (data && data.errors && typeof data.errors === "object") {
     const firstKey = Object.keys(data.errors)[0];
-    if (firstKey && Array.isArray(data.errors[firstKey]) && data.errors[firstKey][0]) {
+    if (
+      firstKey &&
+      Array.isArray(data.errors[firstKey]) &&
+      data.errors[firstKey][0]
+    ) {
       msg = data.errors[firstKey][0];
     }
   }
@@ -42,7 +50,9 @@ function extractErrorMessage(data, status) {
 // tolerant request helper: handles 204, non-JSON text, and surfaces server errors
 async function request(method, path, body) {
   if (!API) {
-    console.error("VITE_API_URL is not set. Create frontend/.env with VITE_API_URL=http://localhost:8000");
+    console.error(
+      "VITE_API_URL is not set. Create frontend/.env with VITE_API_URL=http://localhost:8000"
+    );
     throw new Error("API base URL not configured");
   }
 
@@ -155,7 +165,11 @@ export async function apiProfileAvatar(file) {
 }
 
 // Accepts: { current_password, new_password, new_password_confirmation }
-export async function apiChangePassword({ current_password, new_password, new_password_confirmation }) {
+export async function apiChangePassword({
+  current_password,
+  new_password,
+  new_password_confirmation,
+}) {
   await csrf();
   return request("PUT", "/api/profile/password", {
     current_password,
@@ -163,14 +177,27 @@ export async function apiChangePassword({ current_password, new_password, new_pa
     new_password_confirmation,
   });
 }
+
 // Cart APIs
 export function apiCart() {
   return request("GET", "/api/cart");
 }
 
-export async function apiCartAddItem({ product_id, name, price, quantity = 1, image_url }) {
+export async function apiCartAddItem({
+  product_id,
+  name,
+  price,
+  quantity = 1,
+  image_url,
+}) {
   await csrf();
-  return request("POST", "/api/cart/items", { product_id, name, price, quantity, image_url });
+  return request("POST", "/api/cart/items", {
+    product_id,
+    name,
+    price,
+    quantity,
+    image_url,
+  });
 }
 
 export async function apiCartRemoveItem(itemId) {
@@ -188,6 +215,10 @@ export async function apiCartCheckout() {
   return request("POST", "/api/cart/checkout");
 }
 
+// Orders APIs
+export function apiOrders() {
+  return request("GET", "/api/orders");
+}
 
 // optionally export base for debugging / building absolute URLs
 export const apiBase = API;

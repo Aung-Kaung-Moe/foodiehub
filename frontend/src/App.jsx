@@ -12,8 +12,16 @@ import Profile from "./pages/Profile.jsx";
 import Contact from "./pages/Contact.jsx";
 import Auth from "./pages/Auth.jsx";
 import Cart from "./pages/Cart.jsx";
+import Orders from "./pages/Orders.jsx";
 import { foods as ALL_ITEMS } from "./data/foods.js";
 import { apiLogout, apiMe, apiCartAddItem } from "./lib/api";
+
+// helper: make sure price is a clean rounded value (4.2 -> 4, 4.9 -> 5)
+const normalizePrice = (p) => {
+  const n = Number(p);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n);
+};
 
 export default function App() {
   const navigate = useNavigate();
@@ -79,7 +87,8 @@ export default function App() {
       const res = await apiCartAddItem({
         product_id: item.id,
         name: item.name,
-        price: item.price,
+        // 🔧 use normalized price so backend + cart match the UI
+        price: normalizePrice(item.price),
         quantity: 1,
         image_url: item.img,
       });
@@ -136,7 +145,6 @@ export default function App() {
           />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
-          {/* pass showToast + user + updater into Profile */}
           <Route
             path="/profile"
             element={
@@ -147,9 +155,10 @@ export default function App() {
               />
             }
           />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/cart" element={<Cart />} />
           <Route path="/login" element={<Auth onLogin={handleLogin} />} />
           <Route path="/register" element={<Auth onLogin={handleLogin} />} />
-          <Route path="/cart" element={<Cart />} />
         </Routes>
       </main>
       <Footer />
@@ -177,7 +186,8 @@ export default function App() {
                   </p>
                 </div>
                 <div className="mt-2 text-lg font-semibold text-emerald-300">
-                  ${Number(selected.price).toFixed(2)}
+                  {/* 🔧 show same normalized price as what we send to cart */}
+                  ${normalizePrice(selected.price).toFixed(2)}
                 </div>
               </div>
             </div>

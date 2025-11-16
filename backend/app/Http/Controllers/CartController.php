@@ -4,132 +4,176 @@ namespace App\Http\Controllers;
 
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Order;
+use App\Models\OrderItem;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
-    protected function forUser($user)
-    {
-        return Cart::firstOrCreate(
-            ['user_id' => $user->id],
-            ['transport' => null]
-        );
-    }
-
     public function show(Request $request)
     {
         $user = $request->user();
-        $cart = Cart::with('items')->firstOrCreate(
-            ['user_id' => $user->id],
-            ['transport' => null]
-        );
+
+        $cart = Cart::with('items')
+            ->firstOrCreate(
+                ['user_id' => $user->id],
+                ['transport' => null]
+            );
 
         return response()->json([
-            'id'        => $cart->id,
-            'transport' => $cart->transport,
-            'items'     => $cart->items->map(function (CartItem $item) {
-                return [
-                    'id'         => $item->id,
-                    'product_id' => $item->product_id,
-                    'name'       => $item->name,
-                    'price'      => (float) $item->price,
-                    'quantity'   => (int) $item->quantity,
-                    'image_url'  => $item->image_url,
-                ];
-            })->values(),
+            'cart' => $cart,
         ]);
     }
 
     public function addItem(Request $request)
     {
         $user = $request->user();
+
         $data = $request->validate([
-            'product_id' => 'nullable|integer',
-            'name'       => 'required|string|max:255',
-            'price'      => 'required|numeric|min:0',
-            'quantity'   => 'nullable|integer|min:1',
-            'image_url'  => 'nullable|string|max:2048',
+            'product_id' => ['required', 'integer'],
+            'name'       => ['required', 'string'],
+            'price'      => ['required', 'numeric'],
+            'quantity'   => ['nullable', 'integer', 'min:1'],
+            'image_url'  => ['nullable', 'string'],
         ]);
 
-        $quantity = $data['quantity'] ?? 1;
+        // default quantity = 1
+        $qty = (int) ($data['quantity'] ?? 1);
 
-        $cart = $this->forUser($user);
+        $cart = Cart::firstOrCreate(
+            ['user_id' => $user->id],
+            ['transport' => null]
+        );
 
-        // If same product already exists, bump quantity
-        $item = $cart->items()
-            ->where('product_id', $data['product_id'] ?? null)
-            ->where('name', $data['name'])
-            ->first();
+        // 🔧 FIX: no more DB::raw. We manually increment if item exists,
+        // otherwise start from 0 so first add is exactly quantity = 1.
+        $item = CartItem::firstOrNew([
+            'cart_id'    => $cart->id,
+            'product_id' => $data['product_id'],
+        ]);
 
-        if ($item) {
-            $item->quantity += $quantity;
-            $item->save();
-        } else {
-            $item = $cart->items()->create([
-                'product_id' => $data['product_id'] ?? null,
-                'name'       => $data['name'],
-                'price'      => $data['price'],
-                'quantity'   => $quantity,
-                'image_url'  => $data['image_url'] ?? null,
-            ]);
-        }
+        // update core fields every time so price / name stay in sync
+        $item->name      = $data['name'];
+        $item->price     = $data['price'];          // will now be 3.50, not old 4.00
+        $item->image_url = $data['image_url'] ?? null;
+
+        $currentQty      = $item->exists ? (int) $item->quantity : 0;
+        $item->quantity  = $currentQty + $qty;
+
+        $item->save();
+
+        // reload items relation
+        $cart->load('items');
 
         return response()->json([
-            'message' => 'Item Added successfully',
+            'message' => 'Item added successfully',
+            'cart'    => $cart,
             'item'    => $item,
         ], 201);
     }
 
-    public function removeItem(Request $request, $id)
+    public function removeItem(Request $request, CartItem $item)
     {
         $user = $request->user();
-        $cart = $this->forUser($user);
 
-        $item = $cart->items()->where('id', $id)->first();
-
-        if (! $item) {
-            return response()->json(['message' => 'Item not found'], 404);
+        if ($item->cart->user_id !== $user->id) {
+            abort(403, 'Unauthorized');
         }
 
         $item->delete();
 
-        return response()->json(['message' => 'Item removed']);
+        return response()->json([
+            'message' => 'Item removed',
+        ]);
     }
 
     public function setTransport(Request $request)
     {
         $user = $request->user();
+
         $data = $request->validate([
-            'transport' => 'required|in:bike,motorcycle,car',
+            'transport' => ['required', 'string'],
         ]);
 
-        $cart = $this->forUser($user);
+        $cart = Cart::firstOrCreate(
+            ['user_id' => $user->id],
+            ['transport' => null]
+        );
+
         $cart->transport = $data['transport'];
         $cart->save();
 
         return response()->json([
-            'message'   => 'Transport updated',
-            'transport' => $cart->transport,
+            'message'  => 'Transport updated',
+            'cart'     => $cart,
         ]);
+    }
+
+    protected function calculateDeliveryFee(?string $transport): float
+    {
+        return match ($transport) {
+            'bike'        => 2.0,
+            'motorcycle'  => 4.0,
+            'car'         => 6.0,
+            default       => 0.0,
+        };
     }
 
     public function checkout(Request $request)
     {
         $user = $request->user();
-        $cart = $this->forUser($user);
-        $cart->load('items');
 
-        if ($cart->items->isEmpty()) {
-            return response()->json(['message' => 'Cart is empty'], 422);
+        $cart = Cart::with('items')
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$cart || $cart->items->isEmpty()) {
+            return response()->json([
+                'message' => 'Cart is empty',
+            ], 422);
         }
 
-        // Real app: create Order, etc. Here we just clear cart.
-        foreach ($cart->items as $item) {
-            $item->delete();
-        }
-        $cart->transport = null;
-        $cart->save();
+        $transport   = $cart->transport;
+        $deliveryFee = $this->calculateDeliveryFee($transport);
 
-        return response()->json(['message' => 'Order submitted successfully']);
+        $subtotal = $cart->items->reduce(function ($carry, CartItem $item) {
+            return $carry + ($item->price * $item->quantity);
+        }, 0.0);
+
+        $total = $subtotal + $deliveryFee;
+
+        DB::transaction(function () use ($user, $cart, $subtotal, $deliveryFee, $total, $transport) {
+            // 1) create order
+            $order = Order::create([
+                'user_id'      => $user->id,
+                'subtotal'     => $subtotal,
+                'delivery_fee' => $deliveryFee,
+                'total'        => $total,
+                'transport'    => $transport,
+                'status'       => 'placed',
+            ]);
+
+            // 2) copy items
+            foreach ($cart->items as $item) {
+                OrderItem::create([
+                    'order_id'   => $order->id,
+                    'product_id' => $item->product_id,
+                    'name'       => $item->name,
+                    'price'      => $item->price,
+                    'quantity'   => $item->quantity,
+                    'image_url'  => $item->image_url,
+                ]);
+            }
+
+            // 3) clear cart items (reset transport too)
+            CartItem::where('cart_id', $cart->id)->delete();
+            $cart->transport = null;
+            $cart->save();
+        });
+
+        return response()->json([
+            'message' => 'Order submitted successfully',
+        ], 201);
     }
 }
